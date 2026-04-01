@@ -89,17 +89,7 @@ sequenceDiagram
     F->>U: Download Certificate.pdf
 ```
 
----
 
-## 📸 Screenshots
-
-| Dashboard Overview | Marketplace |
-| :---: | :---: |
-| ![Dashboard](https://picsum.photos/seed/dashboard/600/400) | ![Marketplace](https://picsum.photos/seed/market/600/400) |
-
-| AI Insights | Profile Settings |
-| :---: | :---: |
-| ![AI](https://picsum.photos/seed/ai/600/400) | ![Settings](https://picsum.photos/seed/settings/600/400) |
 
 ---
 
