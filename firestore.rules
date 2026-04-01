@@ -1,0 +1,190 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Auth UID)
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - email: string (required, email format)
+    //   - role: string (required, enum: ['farmer', 'vendor', 'supplier'])
+    //   - uid: string (required, matches userId)
+    //
+    // Collection: crops
+    // Document ID: cropId
+    // Fields:
+    //   - farmerId: string (required, matches creator UID)
+    //   - cropName: string (required, 1-100 chars)
+    //   - totalQuantity: number (required, positive)
+    //   - availableQuantity: number (required, positive, <= totalQuantity)
+    //   - pricePerKg: number (required, positive)
+    //   - harvestDate: string (required, ISO 8601)
+    //   - location: string (required, 1-200 chars)
+    //
+    // Collection: subscriptions
+    // Document ID: subId
+    // Fields:
+    //   - vendorId: string (required, matches creator UID)
+    //   - farmerId: string (required)
+    //   - cropId: string (required)
+    //   - cropName: string (required)
+    //   - quantityPerWeek: number (required, positive)
+    //   - duration: number (required, positive)
+    //   - startDate: string (required, ISO 8601)
+    //
+    // Collection: products
+    // Document ID: productId
+    // Fields:
+    //   - supplierId: string (required, matches creator UID)
+    //   - name: string (required, 1-100 chars)
+    //   - price: number (required, positive)
+    //   - stock: number (required, non-negative)
+    //   - category: string (required, enum: ['seeds', 'fertilizers', 'tools'])
+    //
+    // Collection: orders
+    // Document ID: orderId
+    // Fields:
+    //   - farmerId: string (required, matches creator UID)
+    //   - products: list (required, strings)
+    //   - totalAmount: number (required, positive)
+    //   - date: string (required, ISO 8601)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == "mithunsrinivas28@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['name', 'email', 'role', 'uid']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['farmer', 'vendor', 'supplier'] &&
+             data.uid == request.auth.uid;
+    }
+
+    function isValidCrop(data) {
+      return hasOnlyAllowedFields(['farmerId', 'cropName', 'totalQuantity', 'availableQuantity', 'pricePerKg', 'harvestDate', 'location']) &&
+             data.farmerId == request.auth.uid &&
+             data.cropName is string && data.cropName.size() > 0 && data.cropName.size() <= 100 &&
+             data.totalQuantity is number && data.totalQuantity > 0 &&
+             data.availableQuantity is number && data.availableQuantity >= 0 && data.availableQuantity <= data.totalQuantity &&
+             data.pricePerKg is number && data.pricePerKg > 0 &&
+             isValidDateString(data.harvestDate) &&
+             data.location is string && data.location.size() > 0 && data.location.size() <= 200;
+    }
+
+    function isValidSubscription(data) {
+      return hasOnlyAllowedFields(['vendorId', 'farmerId', 'cropId', 'cropName', 'quantityPerWeek', 'duration', 'startDate']) &&
+             data.vendorId == request.auth.uid &&
+             data.farmerId is string &&
+             data.cropId is string &&
+             data.cropName is string &&
+             data.quantityPerWeek is number && data.quantityPerWeek > 0 &&
+             data.duration is number && data.duration > 0 &&
+             isValidDateString(data.startDate);
+    }
+
+    function isValidProduct(data) {
+      return hasOnlyAllowedFields(['supplierId', 'name', 'price', 'stock', 'category']) &&
+             data.supplierId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.price is number && data.price > 0 &&
+             data.stock is number && data.stock >= 0 &&
+             data.category in ['seeds', 'fertilizers', 'tools'];
+    }
+
+    function isValidOrder(data) {
+      return hasOnlyAllowedFields(['farmerId', 'products', 'totalAmount', 'date']) &&
+             data.farmerId == request.auth.uid &&
+             data.products is list &&
+             data.totalAmount is number && data.totalAmount > 0 &&
+             isValidDateString(data.date);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+    }
+
+    match /crops/{cropId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'farmer' && isValidCrop(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (resource.data.farmerId == request.auth.uid && isValidCrop(request.resource.data)) ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'vendor' && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableQuantity']) &&
+         request.resource.data.availableQuantity >= 0)
+      );
+      allow delete: if isAuthenticated() && resource.data.farmerId == request.auth.uid;
+    }
+
+    match /subscriptions/{subId} {
+      allow read: if isAuthenticated() && (resource.data.vendorId == request.auth.uid || resource.data.farmerId == request.auth.uid);
+      allow create: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'vendor' && isValidSubscription(request.resource.data);
+      allow update: if false; // Subscriptions are immutable for now
+      allow delete: if isAuthenticated() && resource.data.vendorId == request.auth.uid;
+    }
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'supplier' && isValidProduct(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (resource.data.supplierId == request.auth.uid && isValidProduct(request.resource.data)) ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'farmer' &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']) &&
+         request.resource.data.stock >= 0)
+      );
+      allow delete: if isAuthenticated() && resource.data.supplierId == request.auth.uid;
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && resource.data.farmerId == request.auth.uid;
+      allow create: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'farmer' && isValidOrder(request.resource.data);
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

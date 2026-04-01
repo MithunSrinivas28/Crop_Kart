@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name" },
+        "email": { "type": "string", "format": "email", "description": "Email address" },
+        "role": { "type": "string", "enum": ["farmer", "vendor", "supplier"], "description": "User role" },
+        "uid": { "type": "string", "description": "Firebase Auth UID" }
+      },
+      "required": ["name", "email", "role", "uid"]
+    },
+    "Crop": {
+      "title": "Crop",
+      "description": "Information about a crop listed by a farmer",
+      "type": "object",
+      "properties": {
+        "farmerId": { "type": "string", "description": "UID of the farmer" },
+        "cropName": { "type": "string", "description": "Name of the crop" },
+        "totalQuantity": { "type": "number", "description": "Total quantity listed" },
+        "availableQuantity": { "type": "number", "description": "Remaining quantity available for subscription" },
+        "pricePerKg": { "type": "number", "description": "Price per kilogram" },
+        "harvestDate": { "type": "string", "format": "date-time", "description": "Expected harvest date" },
+        "location": { "type": "string", "description": "Location of the farm" }
+      },
+      "required": ["farmerId", "cropName", "totalQuantity", "availableQuantity", "pricePerKg", "harvestDate", "location"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "A subscription to a crop by a vendor",
+      "type": "object",
+      "properties": {
+        "vendorId": { "type": "string", "description": "UID of the vendor" },
+        "farmerId": { "type": "string", "description": "UID of the farmer" },
+        "cropId": { "type": "string", "description": "ID of the crop document" },
+        "cropName": { "type": "string", "description": "Name of the crop" },
+        "quantityPerWeek": { "type": "number", "description": "Quantity to be supplied per week" },
+        "duration": { "type": "number", "description": "Duration of subscription in weeks" },
+        "startDate": { "type": "string", "format": "date-time", "description": "Subscription start date" }
+      },
+      "required": ["vendorId", "farmerId", "cropId", "cropName", "quantityPerWeek", "duration", "startDate"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Agricultural product listed by a supplier",
+      "type": "object",
+      "properties": {
+        "supplierId": { "type": "string", "description": "UID of the supplier" },
+        "name": { "type": "string", "description": "Product name" },
+        "price": { "type": "number", "description": "Price of the product" },
+        "stock": { "type": "number", "description": "Available stock" },
+        "category": { "type": "string", "enum": ["seeds", "fertilizers", "tools"], "description": "Product category" }
+      },
+      "required": ["supplierId", "name", "price", "stock", "category"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "An order of agricultural products by a farmer",
+      "type": "object",
+      "properties": {
+        "farmerId": { "type": "string", "description": "UID of the farmer" },
+        "products": { "type": "array", "items": { "type": "string" }, "description": "List of product IDs" },
+        "totalAmount": { "type": "number", "description": "Total order amount" },
+        "date": { "type": "string", "format": "date-time", "description": "Order date" }
+      },
+      "required": ["farmerId", "products", "totalAmount", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/crops/{cropId}": { "schema": "Crop", "description": "Crop listings" },
+    "/subscriptions/{subId}": { "schema": "Subscription", "description": "Vendor subscriptions" },
+    "/products/{productId}": { "schema": "Product", "description": "Supplier products" },
+    "/orders/{orderId}": { "schema": "Order", "description": "Farmer orders" }
+  }
+}
